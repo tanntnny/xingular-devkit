@@ -11,12 +11,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const USAGE = `run-digest.mjs — evidence for why a Xingular Harness run stopped
 
 Usage:
-  node run-digest.mjs <run-id|run-id-prefix|latest|latest-unfinished> [options]
+  node run-digest.mjs <run-id|run-id-prefix|latest|latest-unfinished|current-session> [options]
   node run-digest.mjs --list [n] [--session <id>] [--all]
 
 Options:
   --data <root>       Search only this data root (repeatable). Default: the profiles, then the usual roots.
   --session <id>      Limit latest/--list to one session.
+  --current-run <id>  Full invoking run id (required for current-session).
   --exclude <run-id>  Skip this run for latest (pass the diagnosing run's own id).
   --all               Include system runs (reflection, probe, improver) and subagent runs.
   --around <seq>      Print raw events near one sequence number instead of the digest.
@@ -129,6 +130,41 @@ export function findRun(roots, target) {
 }
 
 const isUserRun = (record) => !record.parentRunId && !SYSTEM_TRIGGERS.has(record.trigger)
+
+export function currentSessionRuns(roots, id) {
+  if (!id) throw new Error('current-session requires --current-run with the full invoking run id.')
+  const all = listRuns(roots)
+  const matches = all.filter(({ record }) => record.id === id)
+  if (matches.length !== 1) throw new Error(`Current run ${id} ${matches.length ? 'is ambiguous across data roots' : 'was not found exactly'}.`)
+  const current = matches[0]
+  const record = current.record
+  if (typeof record.sessionId !== 'string' || !record.sessionId.trim()) throw new Error('Current run is missing session identity.')
+  const currentTime = Date.parse(record.startedAt)
+  if (!Number.isFinite(currentTime)) throw new Error('Current run has missing or invalid start time; ordering is ambiguous.')
+  const prior = []
+  for (const item of all) {
+    const candidate = item.record
+    if (item.root !== current.root || candidate.id === id || !isUserRun(candidate)) continue
+    if (typeof candidate.sessionId !== 'string' || !candidate.sessionId.trim()) {
+      const time = Date.parse(candidate.startedAt)
+      if (!Number.isFinite(time) || time <= currentTime) throw new Error(`Run ${candidate.id} has missing session identity; cannot determine conversation.`)
+      continue
+    }
+    if (candidate.sessionId !== record.sessionId) continue
+    const native = typeof record.nativeSessionId === 'string' && record.nativeSessionId.trim() ? record.nativeSessionId : null
+    const otherNative = typeof candidate.nativeSessionId === 'string' && candidate.nativeSessionId.trim() ? candidate.nativeSessionId : null
+    if (native && otherNative && native !== otherNative) continue
+    const time = Date.parse(candidate.startedAt)
+    if (!Number.isFinite(time) || time === currentTime) throw new Error(`Run ${candidate.id} has missing or ambiguous ordering relative to the current run.`)
+    if (time > currentTime) continue
+    if (Boolean(native) !== Boolean(otherNative)) throw new Error(`Run ${candidate.id} has missing native session identity; cannot determine conversation.`)
+    prior.push({ ...item, time })
+  }
+  prior.sort((a, b) => b.time - a.time)
+  if (prior.length > 1 && prior[0].time === prior[1].time) throw new Error('Most recent prior run has ambiguous ordering (equal start times).')
+  if (!prior.length) throw new Error('No prior run found in the current conversation.')
+  return prior
+}
 
 /** Whether the process that owns a run is still alive (a live run is not a stopped one). */
 export function ownerAlive(root, id) {
@@ -655,6 +691,7 @@ function parseArgs(argv) {
     const next = () => argv[++index]
     if (arg === '--data') options.data.push(next())
     else if (arg === '--session') options.session = next()
+    else if (arg === '--current-run') options.currentRun = next()
     else if (arg === '--exclude') options.exclude = next()
     else if (arg === '--all') options.all = true
     else if (arg === '--around') options.around = Number(next())
@@ -700,7 +737,11 @@ export function main(argv = process.argv.slice(2), out = (text) => process.stdou
   }
 
   let entry
-  if (options.target === 'latest' || options.target === 'latest-unfinished') {
+  let currentSession
+  if (options.target === 'current-session') {
+    currentSession = currentSessionRuns(roots, options.currentRun)
+    entry = currentSession[0]
+  } else if (options.target === 'latest' || options.target === 'latest-unfinished') {
     const runs = listRuns(roots).filter(keep).filter((item) => !(isUnsettled(item.record.status) && ownerAlive(item.root, item.record.id)))
     entry = options.target === 'latest' ? runs[0] : runs.find((item) => looksUnfinished(item.root, item.record))
     if (!entry) throw new Error(`No ${options.target === 'latest' ? 'settled' : 'unfinished'} run found${options.session ? ` in session ${options.session}` : ''}.`)
@@ -721,8 +762,8 @@ export function main(argv = process.argv.slice(2), out = (text) => process.stdou
   }
 
   const digest = analyzeRun(entry.root, entry.record, { timeline: options.timeline })
-  digest.session = listRuns([entry.root])
-    .filter((item) => item.record.sessionId === entry.record.sessionId && !item.record.parentRunId)
+  digest.session = (currentSession ?? listRuns([entry.root])
+    .filter((item) => item.record.sessionId === entry.record.sessionId && !item.record.parentRunId))
     .map(({ record }) => ({ id: record.id, startedAt: record.startedAt, status: record.status, terminalCode: record.terminalCode ?? null, resumedFromRunId: record.resumedFromRunId }))
     .reverse()
   const here = dirname(fileURLToPath(import.meta.url))

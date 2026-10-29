@@ -273,3 +273,57 @@ test('renderMarkdown survives a run with no events', () => {
   const record = writeRun(root, { status: 'interrupted' }, [])
   assert.match(renderMarkdown(analyzeRun(root, record)), /## Timeline/)
 })
+
+
+test('current-session selects latest prior regardless of status and bounds neighbors', () => {
+  const root = newRoot()
+  const otherRoot = newRoot()
+  const common = { sessionId: 'session', nativeSessionId: 'branch' }
+  const older = writeRun(root, common, [['completed', {}]])
+  const stuck = writeRun(root, { ...common, status: 'running', endedAt: null }, [])
+  writeFileSync(join(root, 'runs', stuck.id, 'owner.json'), JSON.stringify({ pid: process.pid }))
+  writeRun(root, { sessionId: 'other', nativeSessionId: 'branch' }, [])
+  writeRun(root, { sessionId: 'session', nativeSessionId: 'other-branch' }, [])
+  writeRun(otherRoot, common, [])
+  const current = writeRun(root, { ...common, status: 'running' }, [])
+  writeRun(root, common, [])
+  const out = []
+  main(['current-session', '--current-run', current.id, '--data', root, '--data', otherRoot, '--workspace', root, '--json'], text => out.push(text))
+  const digest = JSON.parse(out[0])
+  assert.equal(digest.run.id, stuck.id)
+  assert.deepEqual(digest.session.map(item => item.id), [older.id, stuck.id])
+  const completed = writeRun(root, common, [['completed', {}]])
+  const next = writeRun(root, common, [])
+  const out2 = []
+  main(['current-session', '--current-run', next.id, '--data', root, '--workspace', root, '--json'], text => out2.push(text))
+  assert.equal(JSON.parse(out2[0]).run.id, completed.id)
+})
+
+test('current-session rejects missing identity, no prior, and ambiguous ordering', () => {
+  const root = newRoot()
+  const current = writeRun(root, { sessionId: 's', nativeSessionId: 'n' }, [])
+  const run = (id = current.id) => main(['current-session', '--current-run', id, '--data', root, '--workspace', root], () => {})
+  assert.throws(() => run('missing'), /not found exactly/)
+  assert.throws(() => run(current.id.slice(0, 6)), /not found exactly/)
+  assert.throws(() => run(), /No prior run/)
+  const missing = writeRun(root, { sessionId: null }, [])
+  assert.throws(() => run(missing.id), /missing session identity/)
+  const earlier = writeRun(root, { sessionId: 's', nativeSessionId: null, startedAt: '2020-01-01T00:00:00Z' }, [])
+  assert.throws(() => run(), /missing native session identity/)
+  writeFileSync(join(root, 'runs', earlier.id, 'run.json'), JSON.stringify({ ...earlier, nativeSessionId: 'n', startedAt: current.startedAt }))
+  assert.throws(() => run(), /ambiguous ordering/)
+  writeFileSync(join(root, 'runs', earlier.id, 'run.json'), JSON.stringify({ ...earlier, nativeSessionId: 'n', startedAt: 'invalid' }))
+  assert.throws(() => run(), /ambiguous ordering/)
+})
+
+test('current-session rejects duplicate roots and tied prior runs', () => {
+  const root = newRoot()
+  const other = newRoot()
+  const first = writeRun(root, { sessionId: 's', startedAt: '2020-01-01T00:00:00Z' }, [])
+  writeRun(root, { sessionId: 's', startedAt: first.startedAt }, [])
+  const current = writeRun(root, { sessionId: 's' }, [])
+  const args = ['current-session', '--current-run', current.id, '--data', root, '--workspace', root]
+  assert.throws(() => main(args, () => {}), /ambiguous ordering/)
+  writeRun(other, { id: current.id, sessionId: 's' }, [])
+  assert.throws(() => main([...args, '--data', other], () => {}), /ambiguous across data roots/)
+})

@@ -20,7 +20,7 @@ A folder is used where it is, not copied, so edits apply after a restart. New pl
 
 | Command | What it does |
 |---|---|
-| `/xdiag: [run-id\|latest\|latest-unfinished] [what you expected]` | Diagnoses one run. It defaults to the newest run that looks unfinished. |
+| `/xdiag: [run-id\|latest\|latest-unfinished] [what you expected]` | Diagnoses one run. By default it selects the latest prior run in the invoking conversation, including completed or stuck runs. |
 | `/xdiag:sweep [days] [focus]` | Tallies why recent runs stopped and diagnoses one example of each pattern. |
 | `/xdiag:propose [report path]` | Turns a diagnosis report into one draft proposal in the owning repository. |
 
@@ -32,9 +32,12 @@ The script also works on its own:
 
 ```sh
 node skills/xingular-run-forensics/scripts/run-digest.mjs --list 20
+node skills/xingular-run-forensics/scripts/run-digest.mjs current-session --current-run <full-invoking-run-id>
 node skills/xingular-run-forensics/scripts/run-digest.mjs latest-unfinished
 node skills/xingular-run-forensics/scripts/run-digest.mjs <run-id> --around 120 --span 8
 ```
+
+For the default, the skill gets the invoking full run ID from `trajectory_read({run:'current'})`. The selector matches its exact data root and session and, where recorded, native session; it excludes the current and later runs. Missing or ambiguous identity or ordering and no prior run are errors, not a reason to search globally. Explicit selectors retain their existing behavior.
 
 ## What it reads and writes
 
