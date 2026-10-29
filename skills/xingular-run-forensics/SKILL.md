@@ -59,5 +59,5 @@ Product code stays untouched.
 
 ## Other branches
 
-- **Patterns across many runs** (`/xdiag-sweep`, or "why do my runs keep stopping"): follow [the sweep](references/sweep.md).
+- **Patterns across many runs** (`/xdiag:sweep`, or "why do my runs keep stopping"): follow [the sweep](references/sweep.md).
 - **What an event or field means**, or where the Harness records it: see [the evidence map](references/evidence-map.md).

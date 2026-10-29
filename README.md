@@ -20,11 +20,11 @@ A folder is used where it is, not copied, so edits apply after a restart. New pl
 
 | Command | What it does |
 |---|---|
-| `/xdiag [run-id\|latest\|latest-unfinished] [what you expected]` | Diagnoses one run. It defaults to the newest run that looks unfinished. |
-| `/xdiag-sweep [days] [focus]` | Tallies why recent runs stopped and diagnoses one example of each pattern. |
-| `/xdiag-propose [report path]` | Turns a diagnosis report into one draft proposal in the owning repository. |
+| `/xdiag: [run-id\|latest\|latest-unfinished] [what you expected]` | Diagnoses one run. It defaults to the newest run that looks unfinished. |
+| `/xdiag:sweep [days] [focus]` | Tallies why recent runs stopped and diagnoses one example of each pattern. |
+| `/xdiag:propose [report path]` | Turns a diagnosis report into one draft proposal in the owning repository. |
 
-You can also just ask: "why did my last run stop?" The skill `xingular-run-forensics` triggers on its own.
+These routes require a Harness version implementing the package `commandPrefix` and `defaultPrompt` prompt-routing contract. You can also just ask: "why did my last run stop?" The skill `xingular-run-forensics` triggers on its own.
 
 Reports go to `<workspace>/outputs/diagnoses/`. The workspace is the folder that holds the Xingular repositories, found by package name. Override it with `--workspace` or `$XINGULAR_WORKSPACE`.
 
