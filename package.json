@@ -1,12 +1,16 @@
 {
   "name": "@xingular/devkit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Developer tools for Xingular Agent: diagnose why a Harness run stopped short and propose the fix in the right repository.",
   "license": "MIT",
   "type": "module",
   "keywords": ["pi-package", "xingular", "diagnostics"],
   "engines": { "node": ">=20" },
   "files": ["skills", "prompts", "README.md"],
+  "harness": {
+    "commandPrefix": "xdiag",
+    "defaultPrompt": "diagnose"
+  },
   "pi": {
     "skills": ["./skills"],
     "prompts": ["./prompts"]

@@ -24,8 +24,9 @@ Product code stays untouched.
 ## Steps
 
 1. **Pick the run.**
-   - With no run id, use `latest-unfinished`. It skips runs that are still live, including this one.
-   - If the person's description doesn't match what the digest shows, run `--list 15` and ask which run they mean.
+   - With no selector, inspect the invoking conversation and call `trajectory_read({run:'current'})` to obtain the full `run.id`. Run the digest with `current-session --current-run <full-id>`: it selects the latest prior run in this conversation regardless of status, excluding the invoking run and later runs. It matches the data root, session and native session where recorded.
+   - If the current run, identity, or ordering cannot be established, or there is no prior run, report the error and ask for an explicit run id. Never fall back to a global latest selector.
+   - If the person's description doesn't match what the digest shows, ask which run they mean; use `--list 15` only as an explicit broader search.
    - `--session <id>` narrows the search to one conversation.
    - Done when you have one run id that the person's description matches.
 
@@ -59,5 +60,5 @@ Product code stays untouched.
 
 ## Other branches
 
-- **Patterns across many runs** (`/xdiag-sweep`, or "why do my runs keep stopping"): follow [the sweep](references/sweep.md).
+- **Patterns across many runs** (`/xdiag:sweep`, or "why do my runs keep stopping"): follow [the sweep](references/sweep.md).
 - **What an event or field means**, or where the Harness records it: see [the evidence map](references/evidence-map.md).
